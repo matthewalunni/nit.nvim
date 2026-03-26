@@ -1,0 +1,144 @@
+local M = {}
+
+local _setup_done = false
+
+-- Define highlight groups used by nit.nvim.
+local function setup_highlights()
+  local function hl(name, opts)
+    opts.default = true
+    vim.api.nvim_set_hl(0, name, opts)
+  end
+
+  hl("NitSign",        { fg = "#61afef", default = true })
+  hl("NitAuthor",      { fg = "#c678dd", bold = true, default = true })
+  hl("NitBody",        { fg = "#abb2bf", default = true })
+  hl("NitMeta",        { fg = "#5c6370", italic = true, default = true })
+  hl("NitThreadBorder",{ fg = "#3e4451", default = true })
+  hl("NitThreadLine",  { fg = "#abb2bf", default = true })
+  hl("NitCommentBadge",{ fg = "#61afef", default = true })
+  hl("NitViewedFile",  { fg = "#5c6370", default = true })
+end
+
+-- Set up an autocmd that attaches keymaps + extmarks when a diff buffer
+-- belonging to the current review session is entered.
+local function setup_autocmds()
+  local group = vim.api.nvim_create_augroup("NitSession", { clear = true })
+
+  -- Re-apply highlights on colorscheme change
+  vim.api.nvim_create_autocmd("ColorScheme", {
+    group = group,
+    callback = setup_highlights,
+  })
+
+  -- When any buffer window is entered, check if it's a session file
+  -- and attach diff-buffer keymaps + extmarks if not already done.
+  vim.api.nvim_create_autocmd("BufWinEnter", {
+    group = group,
+    callback = function(ev)
+      local session = require("nit.session")
+      if not session.is_active() then return end
+
+      local bufnr = ev.buf
+      -- Skip non-file buffers
+      if vim.bo[bufnr].buftype ~= "" then return end
+
+      local name = require("nit.util").relative_buf_path(vim.api.nvim_buf_get_name(bufnr))
+      if name == "" then return end
+
+      local file = session.get_file_by_path(name)
+      if not file then return end
+
+      -- Avoid setting up keymaps multiple times on the same buffer
+      local already_setup = vim.b[bufnr]._nit_setup
+      if already_setup then
+        -- Just re-render extmarks (comments may have been refreshed)
+        require("nit.extmarks").render_for_file(file.path, bufnr)
+        return
+      end
+
+      vim.b[bufnr]._nit_setup = true
+      require("nit.keymaps").setup_diff_buf(bufnr, file.path)
+      require("nit.extmarks").render_for_file(file.path, bufnr)
+    end,
+  })
+end
+
+-- Initialize nit.nvim.
+---@param opts table?
+function M.setup(opts)
+  if _setup_done then return end
+  _setup_done = true
+
+  require("nit.config").setup(opts)
+  setup_highlights()
+  setup_autocmds()
+  require("nit.keymaps").setup_global()
+end
+
+-- Open the PR picker.
+function M.open_pr_picker()
+  require("nit.picker").open()
+end
+
+-- Toggle the file panel (open if closed, close if open).
+function M.toggle_panel()
+  require("nit.panel").toggle()
+end
+
+-- Start a pending review (prompts for review comment, then creates draft review).
+function M.start_review()
+  local session = require("nit.session")
+  if not session.is_active() then
+    vim.notify("nit: no active review session", vim.log.levels.WARN)
+    return
+  end
+  local s = session.get()
+  -- Creating a pending review via API would require tracking review IDs;
+  -- for now, notify the user that they can submit directly.
+  vim.notify("nit: use <leader>grS to submit your review when ready")
+end
+
+-- Submit a review with a chosen event type.
+function M.submit_review()
+  local session = require("nit.session")
+  local gh = require("nit.gh")
+
+  if not session.is_active() then
+    vim.notify("nit: no active review session", vim.log.levels.WARN)
+    return
+  end
+
+  local s = session.get()
+  local choices = {
+    { label = "Comment",          event = "comment" },
+    { label = "Approve",          event = "approve" },
+    { label = "Request changes",  event = "request-changes" },
+  }
+
+  vim.ui.select(choices, {
+    prompt = "Submit review as:",
+    format_item = function(c) return c.label end,
+  }, function(choice)
+    if not choice then return end
+
+    -- Open comment form for optional review body
+    require("nit.input").open({
+      mode = "comment",
+      line = 0,
+      on_submit = function(body)
+        vim.notify("nit: submitting review…")
+        gh.submit_review(s.pr_number, choice.event, body, function(_, code)
+          vim.schedule(function()
+            if code ~= 0 then
+              vim.notify("nit: review submission failed", vim.log.levels.ERROR)
+            else
+              vim.notify("nit: review submitted (" .. choice.label .. ")")
+            end
+          end)
+        end)
+      end,
+    })
+  end)
+end
+
+return M
