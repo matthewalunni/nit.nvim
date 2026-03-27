@@ -14,17 +14,17 @@ vim.api.nvim_create_user_command("Nit", function(args)
     nit.open_pr_picker()
   elseif sub == "panel" then
     nit.toggle_panel()
-  elseif sub == "review" then
+  elseif sub == "review" or sub == "start" then
     nit.start_review()
   elseif sub == "submit" then
     nit.submit_review()
   else
-    vim.notify("nit: unknown subcommand '" .. sub .. "'. Use: pr, panel, review, submit", vim.log.levels.WARN)
+    vim.notify("nit: unknown subcommand '" .. sub .. "'. Use: pr, panel, start, submit", vim.log.levels.WARN)
   end
 end, {
   nargs = "?",
   complete = function()
-    return { "pr", "panel", "review", "submit" }
+    return { "pr", "panel", "start", "review", "submit" }
   end,
   desc = "nit.nvim — GitHub PR review",
 })

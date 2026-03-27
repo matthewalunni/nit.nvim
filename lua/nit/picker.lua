@@ -47,7 +47,7 @@ local function on_pr_selected(pr)
       end
 
       -- Fetch changed files
-      d.gh.pr_files(pr.number, function(files, err)
+      d.gh.pr_files(pr.nameWithOwner, pr.number, function(files, err)
         vim.schedule(function()
           if err then
             vim.notify("nit: failed to get PR files: " .. err, vim.log.levels.WARN)

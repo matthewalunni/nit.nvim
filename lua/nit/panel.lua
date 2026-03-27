@@ -75,6 +75,10 @@ function M.toggle()
   end
 end
 
+function M.get_winnr()
+  return is_valid_win() and state.winnr or nil
+end
+
 function M.focus()
   if is_valid_win() then
     vim.api.nvim_set_current_win(state.winnr)

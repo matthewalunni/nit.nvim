@@ -171,6 +171,14 @@ function M.setup_diff_buf(bufnr, path)
   vim.keymap.set("n", "[r", function()
     require("nit.extmarks").prev_comment(bufnr, path)
   end, vim.tbl_extend("force", o, { desc = "Previous review comment" }))
+
+  vim.keymap.set("n", "]c", function()
+    require("nit.diff").next_hunk()
+  end, vim.tbl_extend("force", o, { desc = "Next diff hunk" }))
+
+  vim.keymap.set("n", "[c", function()
+    require("nit.diff").prev_hunk()
+  end, vim.tbl_extend("force", o, { desc = "Previous diff hunk" }))
 end
 
 return M

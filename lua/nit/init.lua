@@ -95,7 +95,7 @@ function M.start_review()
   local s = session.get()
   -- Creating a pending review via API would require tracking review IDs;
   -- for now, notify the user that they can submit directly.
-  vim.notify("nit: use <leader>grS to submit your review when ready")
+  vim.notify("nit: use :Nit submit (or <leader>grS) to submit your review when ready")
 end
 
 -- Submit a review with a chosen event type.

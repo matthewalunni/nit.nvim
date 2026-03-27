@@ -72,32 +72,34 @@ function M.checkout(number, cb)
 end
 
 -- Get changed files for a PR as NitFile[].
--- Parses `gh pr diff <N> --name-status` output.
+-- Uses the GitHub API to get file list with status info.
 -- cb(NitFile[], err)
-function M.pr_files(number, cb)
-  M.run({ "pr", "diff", tostring(number), "--name-status" }, function(lines, code, stderr)
-    if code ~= 0 then
-      return cb(nil, table.concat(stderr, "\n"))
-    end
-    local files = {}
+function M.pr_files(repo, number, cb)
+  M.json({
+    "api",
+    string.format("/repos/%s/pulls/%d/files?per_page=100", repo, number),
+    "--jq", "[.[] | {filename: .filename, status: .status}]",
+  }, function(data, err)
+    if err then return cb(nil, err) end
+    local raw_files = data
+
     local status_map = {
-      A = "added", M = "modified", D = "deleted", R = "renamed",
+      added    = "added",
+      removed  = "deleted",
+      modified = "modified",
+      renamed  = "renamed",
+      copied   = "added",
+      changed  = "modified",
     }
-    for _, line in ipairs(lines) do
-      -- Format: "M\tpath/to/file.go"
-      -- Renamed: "R100\told/path\tnew/path"
-      local parts = vim.split(line, "\t", { plain = true })
-      if #parts >= 2 then
-        local raw_status = parts[1]:sub(1, 1)
-        local status = status_map[raw_status] or "modified"
-        local path = #parts >= 3 and parts[3] or parts[2]
-        table.insert(files, {
-          path = path,
-          status = status,
-          comment_count = 0,
-          viewed = false,
-        })
-      end
+
+    local files = {}
+    for _, f in ipairs(raw_files) do
+      table.insert(files, {
+        path         = f.filename,
+        status       = status_map[f.status] or "modified",
+        comment_count = 0,
+        viewed       = false,
+      })
     end
     cb(files, nil)
   end)
@@ -108,23 +110,10 @@ end
 function M.pr_comments(repo, number, cb)
   M.json({
     "api",
-    string.format("/repos/%s/pulls/%d/comments", repo, number),
-    "--paginate",
+    string.format("/repos/%s/pulls/%d/comments?per_page=100", repo, number),
   }, function(data, err)
     if err then return cb(nil, err) end
-    -- --paginate with JSON returns an array (or nested arrays for multiple pages)
-    -- Flatten if needed
-    if type(data) == "table" and #data > 0 and type(data[1]) == "table" and data[1][1] then
-      local flat = {}
-      for _, page in ipairs(data) do
-        for _, item in ipairs(page) do
-          table.insert(flat, item)
-        end
-      end
-      cb(flat, nil)
-    else
-      cb(data, nil)
-    end
+    cb(data, nil)
   end)
 end
 
