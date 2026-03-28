@@ -39,18 +39,34 @@ local function open_comment_form(form_opts)
 
   require("nit.input").open(vim.tbl_extend("keep", form_opts, {
     on_submit = function(body)
-      if form_opts.reply_to_id then
-        gh.reply_comment(s.repo, s.pr_number, form_opts.reply_to_id, body,
-          function(_, err) after_comment(err) end)
+      if session.is_review_active() and not form_opts.reply_to_id then
+        local c = {
+          path = form_opts.path,
+          side = "RIGHT",
+          line = form_opts.line,
+          body = body,
+        }
+        if form_opts.start_line and form_opts.start_line ~= form_opts.line then
+          c.start_line = form_opts.start_line
+          c.start_side = "RIGHT"
+        end
+        session.add_pending_comment(c)
+        local count = #session.get_pending_comments()
+        vim.notify("nit: comment staged (" .. count .. " pending)")
       else
-        gh.post_comment(s.repo, s.pr_number, {
-          commit_id  = s.head_oid,
-          path       = form_opts.path,
-          side       = "RIGHT",
-          line       = form_opts.line,
-          start_line = form_opts.start_line,
-          body       = body,
-        }, function(_, err) after_comment(err) end)
+        if form_opts.reply_to_id then
+          gh.reply_comment(s.repo, s.pr_number, form_opts.reply_to_id, body,
+            function(_, err) after_comment(err) end)
+        else
+          gh.post_comment(s.repo, s.pr_number, {
+            commit_id  = s.head_oid,
+            path       = form_opts.path,
+            side       = "RIGHT",
+            line       = form_opts.line,
+            start_line = form_opts.start_line,
+            body       = body,
+          }, function(_, err) after_comment(err) end)
+        end
       end
     end,
   }))
@@ -145,17 +161,31 @@ function M.setup_diff_buf(bufnr, path)
   -- Reply to thread at cursor
   vim.keymap.set("n", "<leader>grr", function()
     local line = vim.api.nvim_win_get_cursor(0)[1]
-    local thread = require("nit.extmarks").thread_at(path, line)
-    if not thread then
+    local threads = require("nit.extmarks").threads_at(path, line)
+    if #threads == 0 then
       vim.notify("nit: no comment thread at this line", vim.log.levels.INFO)
       return
     end
-    open_comment_form({
-      mode = "reply",
-      line = line,
-      path = path,
-      reply_to_id = thread.id,
-    })
+    local function reply_to(thread)
+      open_comment_form({
+        mode = "reply",
+        line = line,
+        path = path,
+        reply_to_id = thread.id,
+      })
+    end
+    if #threads == 1 then
+      reply_to(threads[1])
+    else
+      vim.ui.select(threads, {
+        prompt = "Reply to thread:",
+        format_item = function(t)
+          return "@" .. t.author .. ": " .. vim.fn.strcharpart(t.body, 0, 50)
+        end,
+      }, function(choice)
+        if choice then reply_to(choice) end
+      end)
+    end
   end, vim.tbl_extend("force", o, { desc = "Reply to comment thread" }))
 
   -- Toggle thread expand/collapse
