@@ -20,7 +20,7 @@ local function after_comment(err)
           local name = util.relative_buf_path(vim.api.nvim_buf_get_name(bufnr))
           local file = session.get_file_by_path(name)
           if file then
-            extmarks.render_for_file(file.path, bufnr)
+            extmarks.render_and_reapply(file.path, bufnr)
           end
         end
       end

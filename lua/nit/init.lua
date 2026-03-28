@@ -56,8 +56,8 @@ local function setup_autocmds()
       -- Avoid setting up keymaps multiple times on the same buffer
       local already_setup = vim.b[bufnr]._nit_setup
       if already_setup then
-        -- Just re-render extmarks (comments may have been refreshed)
-        require("nit.extmarks").render_for_file(file.path, bufnr)
+        -- Re-render extmarks and reapply any expanded threads
+        require("nit.extmarks").render_and_reapply(file.path, bufnr)
         return
       end
 
@@ -161,7 +161,7 @@ function M.submit_review()
                     local name = util.relative_buf_path(vim.api.nvim_buf_get_name(bufnr))
                     local file = session.get_file_by_path(name)
                     if file then
-                      extmarks.render_for_file(file.path, bufnr)
+                      extmarks.render_and_reapply(file.path, bufnr)
                     end
                   end
                 end
