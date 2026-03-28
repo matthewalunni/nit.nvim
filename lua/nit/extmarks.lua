@@ -206,12 +206,6 @@ end
 function M.clear_for_buf(bufnr)
   if not vim.api.nvim_buf_is_valid(bufnr) then return end
   vim.api.nvim_buf_clear_namespace(bufnr, ns, 0, -1)
-  -- Clear expanded tracking for this buffer
-  for key in pairs(expanded) do
-    if key:match("^" .. tostring(bufnr) .. ":") then
-      expanded[key] = nil
-    end
-  end
 end
 
 return M
