@@ -217,7 +217,7 @@ local function reapply_expanded(bufnr, path)
       local line = tonumber(k_line)
       local threads = find_all_threads_at(path, line)
       if #threads == 0 then
-        expanded[key] = nil
+        expanded[key] = nil  -- safe: Lua permits nil-ing the current key inside pairs()
       else
         local vl = {}
         for _, thread in ipairs(threads) do
