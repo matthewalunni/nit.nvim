@@ -64,6 +64,18 @@ local function find_thread_at(path, line)
   return nil
 end
 
+-- Find all threads for a given file path and line number.
+local function find_all_threads_at(path, line)
+  local session = require("nit.session")
+  local result = {}
+  for _, thread in ipairs(session.get_comments_for(path)) do
+    if thread.line == line then
+      table.insert(result, thread)
+    end
+  end
+  return result
+end
+
 -- Render comment indicators for all threads in a file into a buffer.
 ---@param path string
 ---@param bufnr integer
@@ -74,27 +86,44 @@ function M.render_for_file(path, bufnr)
   local util = require("nit.util")
   local line_count = vim.api.nvim_buf_line_count(bufnr)
 
+  -- Group threads by line so we can aggregate counts and show one indicator per line.
+  local by_line = {}
   for _, thread in ipairs(session.get_comments_for(path)) do
     local lnum = thread.line
     if lnum and lnum >= 1 and lnum <= line_count then
-      local reply_info = #thread.replies > 0
-        and (" (" .. #thread.replies .. " repl" .. (#thread.replies == 1 and "y" or "ies") .. ")")
-        or ""
-      local count = 1 + #thread.replies
-      local sign_label = count >= 10 and "●+" or ("●" .. count) -- sign_text must be <=2 cells; "●" is 1, digits 1-9 are 1 each
-      vim.api.nvim_buf_set_extmark(bufnr, ns, lnum - 1, 0, {
-        virt_text = {
-          { " ", "NitSign" },
-          { thread.author .. ": ", "NitAuthor" },
-          { util.truncate(thread.body, 50), "NitBody" },
-          { reply_info, "NitMeta" },
-        },
-        virt_text_pos = "eol",
-        hl_mode = "combine",
-        sign_text = sign_label,
-        sign_hl_group = "NitSign",
-      })
+      by_line[lnum] = by_line[lnum] or {}
+      table.insert(by_line[lnum], thread)
     end
+  end
+
+  for lnum, threads in pairs(by_line) do
+    -- Sum all comments across every thread at this line.
+    local total = 0
+    for _, t in ipairs(threads) do
+      total = total + 1 + #t.replies
+    end
+    -- sign_text must be ≤2 cells; "●" is 1 cell, digits 1-9 are 1 each.
+    local sign_label = total >= 10 and "●+" or ("●" .. total)
+
+    -- EOL preview uses the first thread; note extras if multiple threads exist.
+    local thread = threads[1]
+    local reply_info = #thread.replies > 0
+      and (" (" .. #thread.replies .. " repl" .. (#thread.replies == 1 and "y" or "ies") .. ")")
+      or ""
+    local extra = #threads > 1 and ("  +" .. (#threads - 1) .. " more thread" .. (#threads - 1 == 1 and "" or "s")) or ""
+
+    vim.api.nvim_buf_set_extmark(bufnr, ns, lnum - 1, 0, {
+      virt_text = {
+        { " 󰆉 ", "NitInlineIcon" },
+        { thread.author .. ": ", "NitInlineAuthor" },
+        { util.truncate(thread.body, 50), "NitInlineBody" },
+        { reply_info .. extra .. " ", "NitInlineMeta" },
+      },
+      virt_text_pos = "eol",
+      hl_mode = "replace",
+      sign_text = sign_label,
+      sign_hl_group = "NitSign",
+    })
   end
 end
 
@@ -103,8 +132,8 @@ end
 ---@param path string
 function M.toggle_thread_at_cursor(bufnr, path)
   local line = vim.api.nvim_win_get_cursor(0)[1]
-  local thread = find_thread_at(path, line)
-  if not thread then
+  local threads = find_all_threads_at(path, line)
+  if #threads == 0 then
     vim.notify("nit: no comment thread at this line", vim.log.levels.INFO)
     return
   end
@@ -115,8 +144,13 @@ function M.toggle_thread_at_cursor(bufnr, path)
     vim.api.nvim_buf_del_extmark(bufnr, ns, expanded[key])
     expanded[key] = nil
   else
-    -- Expand: add virt_lines below the indicator line
-    local vl = build_virt_lines(thread)
+    -- Expand: build virt_lines for ALL threads at this line
+    local vl = {}
+    for _, thread in ipairs(threads) do
+      for _, vline in ipairs(build_virt_lines(thread)) do
+        table.insert(vl, vline)
+      end
+    end
     local mark_id = vim.api.nvim_buf_set_extmark(bufnr, ns, line - 1, 0, {
       virt_lines = vl,
       virt_lines_above = false,
@@ -131,6 +165,14 @@ end
 ---@return NitThread|nil
 function M.thread_at(path, line)
   return find_thread_at(path, line)
+end
+
+-- Return all threads at a given path + line.
+---@param path string
+---@param line integer
+---@return NitThread[]
+function M.threads_at(path, line)
+  return find_all_threads_at(path, line)
 end
 
 -- Jump to the next comment extmark in the buffer.
