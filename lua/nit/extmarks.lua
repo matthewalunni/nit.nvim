@@ -80,6 +80,8 @@ function M.render_for_file(path, bufnr)
       local reply_info = #thread.replies > 0
         and (" (" .. #thread.replies .. " repl" .. (#thread.replies == 1 and "y" or "ies") .. ")")
         or ""
+      local count = 1 + #thread.replies
+      local sign_label = count >= 10 and "●+" or ("●" .. count)
       vim.api.nvim_buf_set_extmark(bufnr, ns, lnum - 1, 0, {
         virt_text = {
           { " ", "NitSign" },
@@ -89,7 +91,8 @@ function M.render_for_file(path, bufnr)
         },
         virt_text_pos = "eol",
         hl_mode = "combine",
-        -- Store thread path+id in the sign column via sign_text
+        sign_text = sign_label,
+        sign_hl_group = "NitSign",
       })
     end
   end
