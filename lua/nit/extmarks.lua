@@ -53,17 +53,6 @@ local function build_virt_lines(thread)
   return lines
 end
 
--- Find the thread for a given file path and line number.
-local function find_thread_at(path, line)
-  local session = require("nit.session")
-  for _, thread in ipairs(session.get_comments_for(path)) do
-    if thread.line == line then
-      return thread
-    end
-  end
-  return nil
-end
-
 -- Find all threads for a given file path and line number.
 local function find_all_threads_at(path, line)
   local session = require("nit.session")
@@ -157,14 +146,6 @@ function M.toggle_thread_at_cursor(bufnr, path)
     })
     expanded[key] = mark_id
   end
-end
-
--- Return the thread at a given path + line (for use by keymaps).
----@param path string
----@param line integer
----@return NitThread|nil
-function M.thread_at(path, line)
-  return find_thread_at(path, line)
 end
 
 -- Return all threads at a given path + line.

@@ -180,7 +180,9 @@ function M.setup_diff_buf(bufnr, path)
       vim.ui.select(threads, {
         prompt = "Reply to thread:",
         format_item = function(t)
-          return "@" .. t.author .. ": " .. vim.fn.strcharpart(t.body, 0, 50)
+          local preview = vim.fn.strcharpart(t.body, 0, 50)
+          if vim.fn.strcharlen(t.body) > 50 then preview = preview .. "…" end
+          return "@" .. t.author .. ": " .. preview
         end,
       }, function(choice)
         if choice then reply_to(choice) end
