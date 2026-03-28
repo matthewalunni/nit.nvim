@@ -29,16 +29,18 @@ function M.open(opts)
     vim.api.nvim_buf_set_lines(buf, 0, -1, false, pre)
   end
 
-  local title
-  if opts.mode == "reply" then
-    title = " Reply to comment "
-  elseif opts.mode == "suggestion" then
-    title = " Suggest edit "
-  else
-    local range = opts.start_line and opts.start_line ~= opts.line
-      and (" L" .. opts.start_line .. "–" .. opts.line)
-      or (" L" .. (opts.line or "?"))
-    title = " Comment on" .. range .. " "
+  local title = opts.title
+  if not title then
+    if opts.mode == "reply" then
+      title = " Reply to comment "
+    elseif opts.mode == "suggestion" then
+      title = " Suggest edit "
+    else
+      local range = opts.start_line and opts.start_line ~= opts.line
+        and (" L" .. opts.start_line .. "–" .. opts.line)
+        or (" L" .. (opts.line or "?"))
+      title = " Comment on" .. range .. " "
+    end
   end
 
   local row = math.max(0, math.floor((vim.o.lines - HEIGHT) / 2))
@@ -64,15 +66,17 @@ function M.open(opts)
   local function submit()
     local lines = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
     local body = vim.trim(table.concat(lines, "\n"))
-    if body == "" then
+    if body == "" and not opts.allow_empty then
       vim.notify("nit: comment body is empty", vim.log.levels.WARN)
       return
     end
+    vim.cmd("stopinsert")
     vim.api.nvim_win_close(win, true)
     opts.on_submit(body)
   end
 
   local function cancel()
+    vim.cmd("stopinsert")
     vim.api.nvim_win_close(win, true)
   end
 

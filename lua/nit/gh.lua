@@ -148,17 +148,77 @@ function M.reply_comment(repo, number, reply_to_id, body, cb)
   }, cb)
 end
 
--- Submit a review.
--- event: "approve" | "request-changes" | "comment"
--- cb(nil, exit_code)
-function M.submit_review(number, event, body, cb)
-  local args = { "pr", "review", tostring(number), "--" .. event }
-  if body and body ~= "" then
-    table.insert(args, "--body")
-    table.insert(args, body)
+-- Run a gh CLI command with data written to its stdin.
+-- cb(stdout_lines, exit_code, stderr_lines)
+function M.run_with_stdin(args, stdin_data, cb)
+  local cmd = vim.list_extend({ GH }, args)
+  local stdout_lines = {}
+  local stderr_lines = {}
+  local job_id = vim.fn.jobstart(cmd, {
+    stdin = "pipe",
+    on_stdout = function(_, data)
+      for _, line in ipairs(data) do
+        if line ~= "" then table.insert(stdout_lines, line) end
+      end
+    end,
+    on_stderr = function(_, data)
+      for _, line in ipairs(data) do
+        if line ~= "" then table.insert(stderr_lines, line) end
+      end
+    end,
+    on_exit = function(_, code)
+      cb(stdout_lines, code, stderr_lines)
+    end,
+  })
+  if job_id > 0 then
+    vim.fn.chansend(job_id, stdin_data)
+    vim.fn.chanclose(job_id, "stdin")
   end
-  M.run(args, function(_, code)
-    cb(nil, code)
+end
+
+-- Create and submit a review, including any staged inline comments.
+-- opts: { commit_id, body, event, comments[] }
+-- event: "APPROVE" | "REQUEST_CHANGES" | "COMMENT"
+-- cb(result, err)
+function M.create_review(repo, number, opts, cb)
+  local payload = {
+    commit_id = opts.commit_id,
+    body = opts.body or "",
+    event = opts.event,
+    comments = opts.comments or {},
+  }
+  local json_str = vim.json.encode(payload)
+  M.run_with_stdin({
+    "api", string.format("/repos/%s/pulls/%d/reviews", repo, number),
+    "--method", "POST",
+    "--input", "-",
+  }, json_str, function(lines, code, stderr)
+    if code ~= 0 then
+      local raw = table.concat(lines, "\n")
+      local ok, parsed = pcall(vim.json.decode, raw)
+      if ok and parsed then
+        if type(parsed.errors) == "table" and #parsed.errors > 0 then
+          cb(nil, tostring(parsed.errors[1]))
+          return
+        elseif type(parsed.message) == "string" then
+          cb(nil, parsed.message)
+          return
+        end
+      end
+      cb(nil, table.concat(stderr, "\n"))
+      return
+    end
+    local raw = table.concat(lines, "\n")
+    if raw == "" then
+      cb({}, nil)
+      return
+    end
+    local ok, parsed = pcall(vim.json.decode, raw)
+    if not ok then
+      cb(nil, "JSON parse error: " .. tostring(parsed))
+      return
+    end
+    cb(parsed, nil)
   end)
 end
 

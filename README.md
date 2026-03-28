@@ -17,6 +17,7 @@ A Neovim plugin for reviewing GitHub Pull Requests without leaving your editor.
 - Neovim 0.9+
 - [`gh`](https://cli.github.com/) CLI — installed and authenticated (`gh auth login`)
 - `git`
+- A [Nerd Font](https://www.nerdfonts.com/) — required for icons in the inline comment indicator
 
 ## Installation
 

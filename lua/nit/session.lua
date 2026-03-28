@@ -29,6 +29,8 @@
 ---@field files NitFile[]
 ---@field comments table<string, NitThread[]>
 ---@field comments_fetched_at number?
+---@field pending_comments table[]
+---@field review_active boolean
 
 local M = {}
 
@@ -57,6 +59,8 @@ function M.init(pr)
     files = {},
     comments = {},
     comments_fetched_at = nil,
+    pending_comments = {},
+    review_active = false,
   }
 end
 
@@ -80,10 +84,14 @@ function M.set_comments(by_path)
   if not state then return end
   state.comments = by_path
   state.comments_fetched_at = os.time()
-  -- Update comment_count on files
+  -- Update comment_count on files (total comments including replies)
   for _, f in ipairs(state.files) do
     local threads = by_path[f.path] or {}
-    f.comment_count = #threads
+    local total = 0
+    for _, t in ipairs(threads) do
+      total = total + 1 + #(t.replies or {})
+    end
+    f.comment_count = total
   end
 end
 
@@ -113,7 +121,11 @@ end
 function M.comment_count_for(path)
   if not state then return 0 end
   local threads = state.comments[path] or {}
-  return #threads
+  local total = 0
+  for _, t in ipairs(threads) do
+    total = total + 1 + #(t.replies or {})
+  end
+  return total
 end
 
 ---@param path string
@@ -125,6 +137,34 @@ function M.mark_viewed(path)
       return
     end
   end
+end
+
+function M.start_review()
+  if not state then return end
+  state.review_active = true
+  state.pending_comments = {}
+end
+
+function M.is_review_active()
+  return state ~= nil and state.review_active == true
+end
+
+---@param comment table
+function M.add_pending_comment(comment)
+  if not state then return end
+  table.insert(state.pending_comments, comment)
+end
+
+---@return table[]
+function M.get_pending_comments()
+  if not state then return {} end
+  return state.pending_comments or {}
+end
+
+function M.clear_pending_comments()
+  if not state then return end
+  state.pending_comments = {}
+  state.review_active = false
 end
 
 return M

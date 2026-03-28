@@ -17,6 +17,11 @@ local function setup_highlights()
   hl("NitThreadLine",  { fg = "#abb2bf", default = true })
   hl("NitCommentBadge",{ fg = "#61afef", default = true })
   hl("NitViewedFile",  { fg = "#5c6370", default = true })
+  -- Collapsed inline comment indicator (pill with background)
+  hl("NitInlineIcon",  { fg = "#61afef", bg = "#2c313a", default = true })
+  hl("NitInlineAuthor",{ fg = "#c678dd", bg = "#2c313a", bold = true, default = true })
+  hl("NitInlineBody",  { fg = "#abb2bf", bg = "#2c313a", default = true })
+  hl("NitInlineMeta",  { fg = "#5c6370", bg = "#2c313a", italic = true, default = true })
 end
 
 -- Set up an autocmd that attaches keymaps + extmarks when a diff buffer
@@ -85,20 +90,18 @@ function M.toggle_panel()
   require("nit.panel").toggle()
 end
 
--- Start a pending review (prompts for review comment, then creates draft review).
+-- Start a review — subsequent comments are staged locally until submit.
 function M.start_review()
   local session = require("nit.session")
   if not session.is_active() then
     vim.notify("nit: no active review session", vim.log.levels.WARN)
     return
   end
-  local s = session.get()
-  -- Creating a pending review via API would require tracking review IDs;
-  -- for now, notify the user that they can submit directly.
-  vim.notify("nit: use :Nit submit (or <leader>grS) to submit your review when ready")
+  session.start_review()
+  vim.notify("nit: review started — comments will be staged until you submit")
 end
 
--- Submit a review with a chosen event type.
+-- Submit a review with a chosen event type, posting all staged comments.
 function M.submit_review()
   local session = require("nit.session")
   local gh = require("nit.gh")
@@ -109,30 +112,62 @@ function M.submit_review()
   end
 
   local s = session.get()
+  local pending = session.get_pending_comments()
+  local count = #pending
+
   local choices = {
-    { label = "Comment",          event = "comment" },
-    { label = "Approve",          event = "approve" },
-    { label = "Request changes",  event = "request-changes" },
+    { label = "Comment",         event = "COMMENT" },
+    { label = "Approve",         event = "APPROVE" },
+    { label = "Request changes", event = "REQUEST_CHANGES" },
   }
 
+  local prompt = count > 0
+    and string.format("Submit review as: (%d comment%s pending)", count, count == 1 and "" or "s")
+    or "Submit review as:"
+
   vim.ui.select(choices, {
-    prompt = "Submit review as:",
+    prompt = prompt,
     format_item = function(c) return c.label end,
   }, function(choice)
     if not choice then return end
 
-    -- Open comment form for optional review body
+    local form_title = count > 0
+      and string.format(" %s (%d pending) ", choice.label, count)
+      or string.format(" %s ", choice.label)
     require("nit.input").open({
       mode = "comment",
       line = 0,
+      title = form_title,
+      allow_empty = choice.event == "APPROVE" or count > 0,
       on_submit = function(body)
         vim.notify("nit: submitting review…")
-        gh.submit_review(s.pr_number, choice.event, body, function(_, code)
+        gh.create_review(s.repo, s.pr_number, {
+          commit_id = s.head_oid,
+          body = body,
+          event = choice.event,
+          comments = pending,
+        }, function(_, err)
           vim.schedule(function()
-            if code ~= 0 then
-              vim.notify("nit: review submission failed", vim.log.levels.ERROR)
+            if err then
+              vim.notify("nit: review submission failed — " .. tostring(err), vim.log.levels.ERROR)
             else
+              session.clear_pending_comments()
               vim.notify("nit: review submitted (" .. choice.label .. ")")
+              require("nit.comments").fetch(function()
+                local extmarks = require("nit.extmarks")
+                local util = require("nit.util")
+                for _, bufnr in ipairs(vim.api.nvim_list_bufs()) do
+                  if vim.api.nvim_buf_is_valid(bufnr) then
+                    local name = util.relative_buf_path(vim.api.nvim_buf_get_name(bufnr))
+                    local file = session.get_file_by_path(name)
+                    if file then
+                      extmarks.render_for_file(file.path, bufnr)
+                    end
+                  end
+                end
+                local panel = require("nit.panel")
+                if panel.is_open() then panel.refresh() end
+              end)
             end
           end)
         end)
