@@ -208,4 +208,51 @@ function M.clear_for_buf(bufnr)
   vim.api.nvim_buf_clear_namespace(bufnr, ns, 0, -1)
 end
 
+-- Re-apply expanded virt_lines for a buffer after a re-render, using fresh
+-- session data. Stale extmark IDs (cleared by render_for_file) are replaced.
+local function reapply_expanded(bufnr, path)
+  for key, _ in pairs(expanded) do
+    local k_bufnr, k_line = key:match("^(%d+):(%d+)$")
+    if tonumber(k_bufnr) == bufnr then
+      local line = tonumber(k_line)
+      local threads = find_all_threads_at(path, line)
+      if #threads == 0 then
+        expanded[key] = nil
+      else
+        local vl = {}
+        for _, thread in ipairs(threads) do
+          for _, vline in ipairs(build_virt_lines(thread)) do
+            table.insert(vl, vline)
+          end
+        end
+        local mark_id = vim.api.nvim_buf_set_extmark(bufnr, ns, line - 1, 0, {
+          virt_lines = vl,
+          virt_lines_above = false,
+        })
+        expanded[key] = mark_id
+      end
+    end
+  end
+end
+
+-- Render comment extmarks for a file and re-apply any previously expanded
+-- threads, preserving cursor positions in all windows showing this buffer.
+---@param path string
+---@param bufnr integer
+function M.render_and_reapply(path, bufnr)
+  if not vim.api.nvim_buf_is_valid(bufnr) then return end
+  local wins = vim.fn.win_findbuf(bufnr)
+  local cursors = {}
+  for _, win in ipairs(wins) do
+    cursors[win] = vim.api.nvim_win_get_cursor(win)
+  end
+  M.render_for_file(path, bufnr)
+  reapply_expanded(bufnr, path)
+  for win, pos in pairs(cursors) do
+    if vim.api.nvim_win_is_valid(win) then
+      vim.api.nvim_win_set_cursor(win, pos)
+    end
+  end
+end
+
 return M
