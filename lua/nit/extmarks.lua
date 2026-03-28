@@ -81,7 +81,7 @@ function M.render_for_file(path, bufnr)
         and (" (" .. #thread.replies .. " repl" .. (#thread.replies == 1 and "y" or "ies") .. ")")
         or ""
       local count = 1 + #thread.replies
-      local sign_label = count >= 10 and "●+" or ("●" .. count)
+      local sign_label = count >= 10 and "●+" or ("●" .. count) -- sign_text must be <=2 cells; "●" is 1, digits 1-9 are 1 each
       vim.api.nvim_buf_set_extmark(bufnr, ns, lnum - 1, 0, {
         virt_text = {
           { " ", "NitSign" },
