@@ -17,6 +17,7 @@
 ---@field start_line number?
 ---@field body string
 ---@field author string
+---@field created_at string
 ---@field replies NitComment[]
 
 ---@class NitSession

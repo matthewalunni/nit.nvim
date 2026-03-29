@@ -24,6 +24,7 @@ local function parse(raw)
         start_line = c.start_line or c.original_start_line,
         body = c.body,
         author = c.user and c.user.login or "?",
+        created_at = c.created_at or c.createdAt or "",
         replies = {},
       }
       top_level[c.id] = thread
