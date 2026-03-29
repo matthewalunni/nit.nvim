@@ -22,6 +22,8 @@ local function setup_highlights()
   hl("NitInlineAuthor",{ fg = "#c678dd", bg = "#2c313a", bold = true, default = true })
   hl("NitInlineBody",  { fg = "#abb2bf", bg = "#2c313a", default = true })
   hl("NitInlineMeta",  { fg = "#5c6370", bg = "#2c313a", italic = true, default = true })
+  hl("NitViewHeader",    { fg = "#61afef", bold = true, default = true })
+  hl("NitViewSubheader", { fg = "#5c6370", italic = true, default = true })
 end
 
 -- Set up an autocmd that attaches keymaps + extmarks when a diff buffer
