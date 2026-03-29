@@ -166,7 +166,7 @@ local function build_document(data)
   local function blank() table.insert(lines, "") end
 
   local function section_header(title)
-    local fill = string.rep("━", math.max(0, w - #title - 5))
+    local fill = string.rep("━", math.max(0, w - vim.fn.strdisplaywidth(title) - 5))
     add("━━━ " .. title .. " " .. fill, "NitViewHeader")
   end
 
@@ -199,7 +199,7 @@ local function build_document(data)
     blank()
 
     -- PR body (word-wrapped)
-    local body = pr.body or ""
+    local body = (type(pr.body) == "string") and pr.body or ""
     if body ~= "" then
       for _, line in ipairs(wrap(body, w - #indent)) do
         add(indent .. line, "NitBody")
@@ -226,7 +226,7 @@ local function build_document(data)
       msg = vim.split(msg, "\n", { plain = true })[1] or ""
       local au       = (c.commit and c.commit.author and c.commit.author.name) or "?"
       -- Truncate message so sha + 2 spaces + msg + 2 spaces + au fits in w
-      local budget   = w - #indent - 7 - 2 - 2 - #au
+      local budget   = w - #indent - 7 - 2 - 2 - vim.fn.strdisplaywidth(au)
       if vim.fn.strdisplaywidth(msg) > budget then
         msg = vim.fn.strcharpart(msg, 0, math.max(0, budget - 1)) .. "…"
       end
