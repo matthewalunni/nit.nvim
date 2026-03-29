@@ -19,7 +19,7 @@ local function fetch_comments_bg(pr)
   end)
 end
 
-local function on_pr_selected(pr)
+local function on_pr_selected(pr, on_ready)
   local d = get_deps()
   vim.notify("nit: checking out PR #" .. pr.number .. " (" .. pr.headRefName .. ")…")
 
@@ -44,6 +44,7 @@ local function on_pr_selected(pr)
         if d.config.get("auto_fetch_comments") then
           fetch_comments_bg(pr)
         end
+        if on_ready then on_ready() end
       end
 
       -- Fetch changed files
@@ -74,6 +75,10 @@ local function on_pr_selected(pr)
     end)
   end)
 end
+
+-- Select a PR directly (skip the picker UI). Optional on_ready callback fires
+-- once the session is fully initialised (files + merge base ready).
+M.select = on_pr_selected
 
 function M.open()
   local d = get_deps()

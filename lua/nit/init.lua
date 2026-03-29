@@ -82,25 +82,63 @@ function M.setup(opts)
   require("nit.keymaps").setup_global()
 end
 
--- Open the PR picker.
-function M.open_pr_picker()
-  require("nit.picker").open()
+-- Load a PR by number then call cb() once the session is ready.
+-- If a session for that PR is already active, cb() is called immediately.
+local function with_pr(pr_number, cb)
+  local session = require("nit.session")
+  if session.is_active() and session.get().pr_number == pr_number then
+    cb()
+    return
+  end
+  local gh = require("nit.gh")
+  vim.notify("nit: loading PR #" .. pr_number .. "…")
+  gh.pr_view(pr_number, function(pr, err)
+    vim.schedule(function()
+      if err then
+        vim.notify("nit: failed to load PR #" .. pr_number .. ": " .. err, vim.log.levels.ERROR)
+        return
+      end
+      require("nit.picker").select(pr, cb)
+    end)
+  end)
+end
+
+-- Open the PR picker, or load a specific PR by number when pr_number is given.
+function M.open_pr_picker(pr_number)
+  if pr_number then
+    with_pr(pr_number, function() end)
+  else
+    require("nit.picker").open()
+  end
 end
 
 -- Toggle the file panel (open if closed, close if open).
-function M.toggle_panel()
-  require("nit.panel").toggle()
+-- When pr_number is given, loads that PR first (ensuring the panel opens).
+function M.toggle_panel(pr_number)
+  if pr_number then
+    with_pr(pr_number, function() require("nit.panel").open() end)
+  else
+    require("nit.panel").toggle()
+  end
 end
 
 -- Start a review — subsequent comments are staged locally until submit.
-function M.start_review()
-  local session = require("nit.session")
-  if not session.is_active() then
-    vim.notify("nit: no active review session", vim.log.levels.WARN)
-    return
+function M.start_review(pr_number)
+  local function do_start()
+    local session = require("nit.session")
+    if not session.is_active() then
+      vim.notify("nit: no active review session", vim.log.levels.WARN)
+      return
+    end
+    session.start_review()
+    vim.notify("nit: review started — comments will be staged until you submit")
   end
-  session.start_review()
-  vim.notify("nit: review started — comments will be staged until you submit")
+
+  if pr_number then
+    with_pr(pr_number, do_start)
+  else
+    do_start()
+  end
 end
 
 -- Submit a review with a chosen event type, posting all staged comments.
@@ -179,8 +217,18 @@ function M.submit_review()
 end
 
 -- Open the full PR view float.
-function M.open_pr_view()
-  require("nit.view").open()
+-- When pr_number is given, loads that PR first if needed.
+function M.open_pr_view(pr_number)
+  if pr_number then
+    with_pr(pr_number, function() require("nit.view").open() end)
+  else
+    local session = require("nit.session")
+    if not session.is_active() then
+      vim.notify("nit: no active review session", vim.log.levels.WARN)
+      return
+    end
+    require("nit.view").open()
+  end
 end
 
 return M

@@ -231,6 +231,22 @@ function M.current_repo(cb)
   end)
 end
 
+-- Fetch a single PR's metadata by number, shaped like list_prs entries.
+-- cb(pr, err)
+function M.pr_view(number, cb)
+  M.json({
+    "pr", "view", tostring(number),
+    "--json", "number,title,author,headRefName,baseRefName,headRefOid,state,isDraft,updatedAt",
+  }, function(data, err)
+    if err then return cb(nil, err) end
+    M.current_repo(function(repo, repo_err)
+      if repo_err then return cb(nil, repo_err) end
+      data.nameWithOwner = repo
+      cb(data, nil)
+    end)
+  end)
+end
+
 -- Fetch PR metadata (title, body, state, author, base/head refs).
 -- cb(data, err)
 function M.pr_details(repo, number, cb)
