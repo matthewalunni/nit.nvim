@@ -90,6 +90,7 @@ function M.open()
   vim.wo[state.winnr].cursorline   = true
 
   set_content({ "", "  Loading…", "" })
+  require("nit.keymaps").setup_view_buf(state.bufnr)
   vim.schedule(function() M.refresh() end)
 
   -- Clean up state when the window is closed externally.
@@ -387,5 +388,31 @@ function M.refresh()
     apply_highlights(hls)
   end)
 end
+
+-- Called after a reply or post succeeds: re-fetch inline comments then refresh the view.
+local function after_view_action(err)
+  if err then
+    vim.schedule(function()
+      vim.notify("nit: post failed — " .. tostring(err), vim.log.levels.ERROR)
+    end)
+    return
+  end
+  vim.schedule(function()
+    vim.notify("nit: comment posted")
+    require("nit.comments").fetch(function()
+      M.refresh()
+    end)
+  end)
+end
+
+-- Return the line_map entry for the current cursor row, or nil.
+function M.entry_at_cursor()
+  if not M.is_open() then return nil end
+  local row = vim.api.nvim_win_get_cursor(state.winnr)[1]
+  return state.line_map[row]
+end
+
+-- Public alias used by keymaps (avoids capturing the local closure).
+M._after_action = after_view_action
 
 return M

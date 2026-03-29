@@ -215,4 +215,80 @@ function M.setup_diff_buf(bufnr, path)
   end, vim.tbl_extend("force", o, { desc = "Previous diff hunk" }))
 end
 
+-- Register buffer-local keymaps for the nit-view float buffer.
+function M.setup_view_buf(bufnr)
+  local o = { buffer = bufnr, silent = true, nowait = true }
+
+  -- Close the view
+  vim.keymap.set("n", "q",   function() require("nit.view").close() end,
+    vim.tbl_extend("force", o, { desc = "Close PR view" }))
+  vim.keymap.set("n", "<Esc>", function() require("nit.view").close() end,
+    vim.tbl_extend("force", o, { desc = "Close PR view" }))
+
+  -- Refresh
+  vim.keymap.set("n", "R", function() require("nit.view").refresh() end,
+    vim.tbl_extend("force", o, { desc = "Refresh PR view" }))
+
+  -- Reply to comment under cursor
+  vim.keymap.set("n", "r", function()
+    local view    = require("nit.view")
+    local entry   = view.entry_at_cursor()
+    if not entry then
+      vim.notify("nit: no comment at cursor", vim.log.levels.INFO)
+      return
+    end
+    local session = require("nit.session")
+    local gh      = require("nit.gh")
+    if not session.is_active() then return end
+    local s = session.get()
+
+    require("nit.input").open({
+      mode  = "reply",
+      line  = 0,
+      title = " Reply ",
+      on_submit = function(body)
+        if entry.type == "inline" then
+          gh.reply_comment(s.repo, s.pr_number, entry.id, body,
+            function(_, err) require("nit.view")._after_action(err) end)
+        else
+          -- For reviews and issue comments: post a new general PR comment
+          gh.post_issue_comment(s.repo, s.pr_number, body,
+            function(_, err) require("nit.view")._after_action(err) end)
+        end
+      end,
+    })
+  end, vim.tbl_extend("force", o, { desc = "Reply to comment" }))
+
+  -- Post a new general PR comment
+  vim.keymap.set("n", "c", function()
+    local session = require("nit.session")
+    local gh      = require("nit.gh")
+    if not session.is_active() then return end
+    local s = session.get()
+
+    require("nit.input").open({
+      mode  = "comment",
+      line  = 0,
+      title = " New PR Comment ",
+      on_submit = function(body)
+        gh.post_issue_comment(s.repo, s.pr_number, body,
+          function(_, err) require("nit.view")._after_action(err) end)
+      end,
+    })
+  end, vim.tbl_extend("force", o, { desc = "Post new PR comment" }))
+
+  -- Jump to diff for inline thread under cursor
+  vim.keymap.set("n", "gf", function()
+    local view  = require("nit.view")
+    local entry = view.entry_at_cursor()
+    if not entry or entry.type ~= "inline" then return end
+    local session = require("nit.session")
+    if not session.is_active() then return end
+    local file = session.get_file_by_path(entry.path)
+    if not file then return end
+    view.close()
+    require("nit.diff").open_for_file(file)
+  end, vim.tbl_extend("force", o, { desc = "Open diff for inline thread" }))
+end
+
 return M
