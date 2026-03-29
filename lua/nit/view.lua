@@ -14,12 +14,11 @@ local function maybe_attach_treesitter(bufnr)
   pcall(vim.treesitter.start, bufnr, "markdown")
 end
 
--- Trigger a render pass on the view buffer+window via render-markdown.nvim's
+-- Trigger a render pass on the given buffer+window via render-markdown.nvim's
 -- render() API, which bypasses its filetype check. No-op if not installed.
-local function maybe_render_markdown()
-  if not render_md then return end
-  if not state.bufnr or not state.winnr then return end
-  pcall(render_md.render, { buf = state.bufnr, win = state.winnr })
+local function maybe_render_markdown(bufnr, winnr)
+  if not render_md or not bufnr or not winnr then return end
+  pcall(render_md.render, { buf = bufnr, win = winnr })
 end
 
 local state = {
@@ -429,7 +428,7 @@ function M.refresh()
     state.line_map = lmap
     set_content(lines)
     apply_highlights(hls)
-    maybe_render_markdown()
+    maybe_render_markdown(state.bufnr, state.winnr)
   end)
 end
 
