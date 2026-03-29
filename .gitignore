@@ -8,3 +8,6 @@
 
 # Neovim plugin testing
 doc/tags
+
+# Superpowers docs
+docs/superpowers/
