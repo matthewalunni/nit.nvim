@@ -256,13 +256,15 @@ local function build_document(data)
   end
 
   for _, ic in ipairs(data.issue_comments or {}) do
-    table.insert(general, {
-      type       = "issue_comment",
-      id         = ic.id,
-      author     = (ic.user and ic.user.login) or "?",
-      body       = (type(ic.body) == "string") and ic.body or "",
-      created_at = ic.created_at or "",
-    })
+    if type(ic.body) == "string" and vim.trim(ic.body) ~= "" then
+      table.insert(general, {
+        type       = "issue_comment",
+        id         = ic.id,
+        author     = (ic.user and ic.user.login) or "?",
+        body       = ic.body,
+        created_at = ic.created_at or "",
+      })
+    end
   end
 
   -- Sort general comments chronologically.
