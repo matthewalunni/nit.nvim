@@ -90,6 +90,7 @@ function M.open()
   vim.wo[state.winnr].cursorline   = true
 
   set_content({ "", "  Loading…", "" })
+  vim.schedule(function() M.refresh() end)
 
   -- Clean up state when the window is closed externally.
   vim.api.nvim_create_autocmd("WinClosed", {
@@ -101,6 +102,59 @@ function M.open()
       state.line_map = {}
     end,
   })
+end
+
+-- Fire four parallel gh fetches. Calls on_done(data) once all complete.
+-- data fields: pr, pr_err, commits, commits_err, reviews, reviews_err,
+--              issue_comments, issue_comments_err
+local function fetch_all(s, on_done)
+  local data      = {}
+  local remaining = 4
+  local gh        = require("nit.gh")
+
+  local function done()
+    remaining = remaining - 1
+    if remaining == 0 then
+      vim.schedule(function() on_done(data) end)
+    end
+  end
+
+  gh.pr_details(s.repo, s.pr_number, function(result, err)
+    data.pr     = result
+    data.pr_err = err
+    done()
+  end)
+
+  gh.pr_commits(s.repo, s.pr_number, function(result, err)
+    data.commits     = result or {}
+    data.commits_err = err
+    done()
+  end)
+
+  gh.pr_reviews(s.repo, s.pr_number, function(result, err)
+    data.reviews     = result or {}
+    data.reviews_err = err
+    done()
+  end)
+
+  gh.pr_issue_comments(s.repo, s.pr_number, function(result, err)
+    data.issue_comments     = result or {}
+    data.issue_comments_err = err
+    done()
+  end)
+end
+
+function M.refresh()
+  if not M.is_open() then return end
+  local session = require("nit.session")
+  if not session.is_active() then return end
+  local s = session.get()
+  set_content({ "", "  Loading…", "" })
+  fetch_all(s, function(data)
+    -- rendering added in Task 6
+    set_content({ "", "  [render not yet implemented]", "" })
+    _ = data  -- suppress unused warning until Task 6
+  end)
 end
 
 return M
