@@ -104,6 +104,142 @@ function M.open()
   })
 end
 
+-- Format an ISO 8601 timestamp as a relative "Xm ago" / "Xh ago" / "Xd ago" string.
+local function rel_time(iso_str)
+  if not iso_str or iso_str == "" then return "" end
+  local y, mo, d, h, mi, s = iso_str:match("(%d+)-(%d+)-(%d+)T(%d+):(%d+):(%d+)")
+  if not y then return iso_str end
+  local t    = os.time({
+    year  = tonumber(y), month = tonumber(mo), day  = tonumber(d),
+    hour  = tonumber(h), min   = tonumber(mi), sec  = tonumber(s),
+  })
+  local diff = os.time() - t
+  if diff < 60    then return "just now" end
+  if diff < 3600  then return math.floor(diff / 60)    .. "m ago" end
+  if diff < 86400 then return math.floor(diff / 3600)  .. "h ago" end
+  return math.floor(diff / 86400) .. "d ago"
+end
+
+-- Word-wrap a string to fit within `width` columns.
+-- Returns a list of strings (lines), each ≤ width characters.
+local function wrap(text, width)
+  local result = {}
+  for _, raw_line in ipairs(vim.split(text, "\n", { plain = true })) do
+    if vim.fn.strdisplaywidth(raw_line) <= width then
+      table.insert(result, raw_line)
+    else
+      local current = ""
+      for word in raw_line:gmatch("%S+") do
+        local candidate = current == "" and word or (current .. " " .. word)
+        if vim.fn.strdisplaywidth(candidate) <= width then
+          current = candidate
+        else
+          if current ~= "" then table.insert(result, current) end
+          current = word
+        end
+      end
+      if current ~= "" then table.insert(result, current) end
+    end
+  end
+  return result
+end
+
+-- Build the full document from fetched data + session inline comments.
+-- Returns lines (string[]), hls ({group,lnum,col_start,col_end}[]), line_map ([row]=entry).
+local function build_document(data)
+  local lines    = {}
+  local hls      = {}
+  local line_map = {}
+  local w        = state.winnr and vim.api.nvim_win_get_width(state.winnr) or 80
+  local indent   = "  "
+
+  -- add(): append a line, optionally highlight the whole line, return its 0-based index.
+  local function add(text, hl_group)
+    local lnum = #lines
+    table.insert(lines, text)
+    if hl_group then
+      table.insert(hls, { group = hl_group, lnum = lnum, col_start = 0, col_end = -1 })
+    end
+    return lnum
+  end
+
+  local function blank() table.insert(lines, "") end
+
+  local function section_header(title)
+    local fill = string.rep("━", math.max(0, w - #title - 5))
+    add("━━━ " .. title .. " " .. fill, "NitViewHeader")
+  end
+
+  -- ── PR Header ──────────────────────────────────────────────────────────
+  local pr       = data.pr or {}
+  local pr_num   = pr.number or require("nit.session").get().pr_number
+  local pr_title = pr.title  or "(unknown)"
+  section_header("PR #" .. pr_num .. ": " .. pr_title)
+
+  if data.pr_err then
+    add(indent .. "[Error loading PR details: " .. data.pr_err .. "]", "NitMeta")
+  else
+    local author    = (pr.user and pr.user.login) or "?"
+    local pr_state  = pr.state or "?"
+    local base_ref  = (pr.base and pr.base.ref) or "?"
+    local head_ref  = (pr.head and pr.head.ref) or "?"
+
+    -- Collect reviewer states for the header line
+    local review_parts = {}
+    for _, rev in ipairs(data.reviews or {}) do
+      if rev.state == "APPROVED" then
+        table.insert(review_parts, (rev.user and rev.user.login or "?") .. " ✓")
+      elseif rev.state == "CHANGES_REQUESTED" then
+        table.insert(review_parts, (rev.user and rev.user.login or "?") .. " ✗")
+      end
+    end
+    local reviews_str = #review_parts > 0 and ("  " .. table.concat(review_parts, "  ")) or ""
+
+    add(indent .. "@" .. author .. " · " .. pr_state .. " · " .. base_ref .. " ← " .. head_ref .. reviews_str, "NitMeta")
+    blank()
+
+    -- PR body (word-wrapped)
+    local body = pr.body or ""
+    if body ~= "" then
+      for _, line in ipairs(wrap(body, w - #indent)) do
+        add(indent .. line, "NitBody")
+      end
+    else
+      add(indent .. "(no description)", "NitMeta")
+    end
+  end
+
+  blank()
+
+  -- ── Commits ────────────────────────────────────────────────────────────
+  local commits = data.commits or {}
+  section_header("Commits (" .. #commits .. ")")
+
+  if data.commits_err then
+    add(indent .. "[Error loading commits: " .. data.commits_err .. "]", "NitMeta")
+  elseif #commits == 0 then
+    add(indent .. "(no commits)", "NitMeta")
+  else
+    for _, c in ipairs(commits) do
+      local sha      = vim.fn.strcharpart(c.sha or "", 0, 7)
+      local msg      = (c.commit and c.commit.message) or ""
+      msg = vim.split(msg, "\n", { plain = true })[1] or ""
+      local au       = (c.commit and c.commit.author and c.commit.author.name) or "?"
+      -- Truncate message so sha + 2 spaces + msg + 2 spaces + au fits in w
+      local budget   = w - #indent - 7 - 2 - 2 - #au
+      if vim.fn.strdisplaywidth(msg) > budget then
+        msg = vim.fn.strcharpart(msg, 0, math.max(0, budget - 1)) .. "…"
+      end
+      local pad = string.rep(" ", math.max(1, budget - vim.fn.strdisplaywidth(msg) + 1))
+      add(indent .. sha .. "  " .. msg .. pad .. au, "NitBody")
+    end
+  end
+
+  blank()
+
+  return lines, hls, line_map
+end
+
 -- Fire four parallel gh fetches. Calls on_done(data) once all complete.
 -- data fields: pr, pr_err, commits, commits_err, reviews, reviews_err,
 --              issue_comments, issue_comments_err
@@ -151,9 +287,10 @@ function M.refresh()
   local s = session.get()
   set_content({ "", "  Loading…", "" })
   fetch_all(s, function(data)
-    -- rendering added in Task 6
-    set_content({ "", "  [render not yet implemented]", "" })
-    _ = data  -- suppress unused warning until Task 6
+    local lines, hls, lmap = build_document(data)
+    state.line_map = lmap
+    set_content(lines)
+    apply_highlights(hls)
   end)
 end
 
