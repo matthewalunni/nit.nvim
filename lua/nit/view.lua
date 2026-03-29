@@ -12,7 +12,7 @@ end)()
 local function maybe_enable_render_markdown(bufnr)
   if not render_md then return end
   pcall(vim.treesitter.start, bufnr, "markdown")
-  pcall(render_md.enable)
+  pcall(render_md.enable, bufnr)
 end
 
 local state = {
