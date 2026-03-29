@@ -1,5 +1,20 @@
 local M = {}
 
+-- Optional render-markdown.nvim integration.
+-- Cached once at module load: nil if not installed, module table if present.
+local render_md = (function()
+  local ok, m = pcall(require, "render-markdown")
+  return ok and m or nil
+end)()
+
+-- Attach a markdown treesitter parser and enable render-markdown.nvim on
+-- the given buffer. No-op when render-markdown is not installed.
+local function maybe_enable_render_markdown(bufnr)
+  if not render_md then return end
+  pcall(vim.treesitter.start, bufnr, "markdown")
+  pcall(render_md.enable)
+end
+
 local state = {
   bufnr    = nil,
   winnr    = nil,
@@ -88,6 +103,8 @@ function M.open()
   vim.wo[state.winnr].relativenumber = false
   vim.wo[state.winnr].signcolumn   = "no"
   vim.wo[state.winnr].cursorline   = true
+
+  maybe_enable_render_markdown(state.bufnr)
 
   set_content({ "", "  Loading…", "" })
   require("nit.keymaps").setup_view_buf(state.bufnr)
