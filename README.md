@@ -11,6 +11,7 @@ A Neovim plugin for reviewing GitHub Pull Requests without leaving your editor.
 - Inline comment threads with author, timestamp, and replies
 - Post comments, reply to threads, and suggest code changes
 - Submit reviews (Comment / Approve / Request changes)
+- Full PR overview: description, commits, and all comments in a single float
 
 ## Requirements
 
@@ -73,6 +74,7 @@ require("nit").setup({
     toggle_panel   = "<leader>grf",
     start_review   = "<leader>grs",
     submit_review  = "<leader>grS",
+    open_pr_view   = "<leader>grv",
   },
 })
 ```
@@ -84,6 +86,7 @@ require("nit").setup({
 | `:Nit`        | Open PR picker (same as `:Nit pr`)   |
 | `:Nit pr`     | Select and checkout a PR             |
 | `:Nit panel`  | Toggle the changed-files panel       |
+| `:Nit view`   | Open the full PR overview float      |
 | `:Nit start`  | Start a review                       |
 | `:Nit submit` | Submit your review                   |
 
@@ -117,3 +120,13 @@ require("nit").setup({
 | `R` | Refresh comments |
 | `]f` / `[f` | Next / previous file |
 | `q` | Close panel |
+
+**PR view** (open with `<leader>grv` or `:Nit view`):
+
+| Key | Description |
+|-----|-------------|
+| `r` | Reply to inline thread, or post a new PR comment for review/issue comments |
+| `c` | Post a new general PR comment |
+| `R` | Refresh |
+| `gf` | Open diff for inline thread under cursor |
+| `q` / `<Esc>` | Close |
