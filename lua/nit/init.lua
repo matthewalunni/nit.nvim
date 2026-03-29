@@ -176,4 +176,9 @@ function M.submit_review()
   end)
 end
 
+-- Open the full PR view float.
+function M.open_pr_view()
+  require("nit.view").open()
+end
+
 return M

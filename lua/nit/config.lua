@@ -17,6 +17,7 @@ local defaults = {
     toggle_panel = "<leader>grf",
     start_review = "<leader>grs",
     submit_review = "<leader>grS",
+    open_pr_view = "<leader>grv",
   },
 }
 

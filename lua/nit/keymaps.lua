@@ -83,6 +83,7 @@ function M.setup_global()
   map("n", keys.toggle_panel,   nit.toggle_panel,   { desc = "Review: Toggle file panel" })
   map("n", keys.start_review,   nit.start_review,   { desc = "Review: Start review" })
   map("n", keys.submit_review,  nit.submit_review,  { desc = "Review: Submit review" })
+  map("n", keys.open_pr_view,   nit.open_pr_view,   { desc = "Review: Open PR view" })
 end
 
 -- Register buffer-local keymaps for the nit-panel buffer.
@@ -180,9 +181,10 @@ function M.setup_diff_buf(bufnr, path)
       vim.ui.select(threads, {
         prompt = "Reply to thread:",
         format_item = function(t)
-          local preview = vim.fn.strcharpart(t.body, 0, 50)
-          if vim.fn.strcharlen(t.body) > 50 then preview = preview .. "…" end
-          return "@" .. t.author .. ": " .. preview
+          local last = (t.replies and #t.replies > 0) and t.replies[#t.replies] or t
+          local preview = vim.fn.strcharpart(last.body, 0, 50)
+          if vim.fn.strcharlen(last.body) > 50 then preview = preview .. "…" end
+          return "@" .. last.author .. ": " .. preview
         end,
       }, function(choice)
         if choice then reply_to(choice) end
