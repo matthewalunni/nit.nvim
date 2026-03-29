@@ -121,6 +121,14 @@ local function rel_time(iso_str)
   return math.floor(diff / 86400) .. "d ago"
 end
 
+-- Format an ISO 8601 timestamp as "YYYY-MM-DD HH:MM".
+local function fmt_datetime(iso_str)
+  if not iso_str or iso_str == "" then return "" end
+  local y, mo, d, h, mi = iso_str:match("(%d+)-(%d+)-(%d+)T(%d+):(%d+)")
+  if not y then return "" end
+  return string.format("%s-%s-%s %s:%s", y, mo, d, h, mi)
+end
+
 -- Word-wrap a string to fit within `width` columns.
 -- Returns a list of strings (lines), each ≤ width characters.
 local function wrap(text, width)
@@ -226,13 +234,15 @@ local function build_document(data)
       local msg      = (c.commit and c.commit.message) or ""
       msg = vim.split(msg, "\n", { plain = true })[1] or ""
       local au       = (c.commit and c.commit.author and c.commit.author.name) or "?"
-      -- Truncate message so sha + 2 spaces + msg + 2 spaces + au fits in w
-      local budget   = w - 2 - 7 - 2 - 2 - vim.fn.strdisplaywidth(au)
+      local dt       = fmt_datetime((c.commit and c.commit.author and c.commit.author.date) or "")
+      local dt_str   = dt ~= "" and ("  " .. dt) or ""
+      -- Budget: w minus indent(2), sha(7), 2 spaces, 2 spaces, author, datetime suffix
+      local budget   = w - 2 - 7 - 2 - 2 - vim.fn.strdisplaywidth(au) - vim.fn.strdisplaywidth(dt_str)
       if vim.fn.strdisplaywidth(msg) > budget then
         msg = vim.fn.strcharpart(msg, 0, math.max(0, budget - 1)) .. "…"
       end
       local pad = string.rep(" ", math.max(1, budget - vim.fn.strdisplaywidth(msg) + 1))
-      add(indent .. sha .. "  " .. msg .. pad .. au, "NitBody")
+      add(indent .. sha .. "  " .. msg .. pad .. au .. dt_str, "NitBody")
     end
   end
 
@@ -241,12 +251,13 @@ local function build_document(data)
   -- ── Comments ───────────────────────────────────────────────────────────
   section_header("Comments")
 
-  -- Collect PR-level reviews with non-empty body + issue comments into one list.
-  local general = {}
+  -- Build a single unified list of all comments sorted chronologically.
+  local all_comments = {}
 
+  -- PR-level reviews with non-empty body
   for _, rev in ipairs(data.reviews or {}) do
     if type(rev.body) == "string" and vim.trim(rev.body) ~= "" then
-      table.insert(general, {
+      table.insert(all_comments, {
         type       = "review",
         id         = rev.id,
         author     = (rev.user and rev.user.login) or "?",
@@ -256,9 +267,10 @@ local function build_document(data)
     end
   end
 
+  -- General issue/PR comments
   for _, ic in ipairs(data.issue_comments or {}) do
     if type(ic.body) == "string" and vim.trim(ic.body) ~= "" then
-      table.insert(general, {
+      table.insert(all_comments, {
         type       = "issue_comment",
         id         = ic.id,
         author     = (ic.user and ic.user.login) or "?",
@@ -268,9 +280,28 @@ local function build_document(data)
     end
   end
 
-  -- Sort general comments chronologically.
-  table.sort(general, function(a, b) return a.created_at < b.created_at end)
+  -- Inline threads from session
+  local session  = require("nit.session")
+  local by_path  = session.is_active() and (session.get().comments or {}) or {}
+  for path, threads in pairs(by_path) do
+    for _, thread in ipairs(threads) do
+      table.insert(all_comments, {
+        type       = "inline",
+        id         = thread.id,
+        path       = path,
+        line       = thread.line,
+        author     = thread.author,
+        body       = thread.body,
+        created_at = thread.created_at or "",
+        replies    = thread.replies or {},
+      })
+    end
+  end
 
+  -- Sort everything chronologically by created_at.
+  table.sort(all_comments, function(a, b) return a.created_at < b.created_at end)
+
+  -- Error banners
   if data.reviews_err then
     add(indent .. "[Error loading reviews: " .. data.reviews_err .. "]", "NitMeta")
   end
@@ -278,56 +309,44 @@ local function build_document(data)
     add(indent .. "[Error loading issue comments: " .. data.issue_comments_err .. "]", "NitMeta")
   end
 
-  -- Render general comments.
-  for _, c in ipairs(general) do
-    local meta_lnum = add(indent .. "@" .. c.author .. " · " .. rel_time(c.created_at), "NitMeta")
-    line_map[meta_lnum + 1] = { type = c.type, id = c.id }
-    for _, line in ipairs(wrap(c.body, w - #indent)) do
-      local lnum = add(indent .. line, "NitBody")
-      line_map[lnum + 1] = { type = c.type, id = c.id }
+  -- Render unified comment list
+  for _, c in ipairs(all_comments) do
+    local dt      = fmt_datetime(c.created_at)
+    local ts      = dt ~= "" and (" · " .. dt) or ""
+
+    if c.type == "inline" then
+      -- Inline thread: show file + line context in the header
+      local meta_lnum = add(indent .. "@" .. c.author .. " · " .. c.path .. ":" .. c.line .. ts, "NitMeta")
+      line_map[meta_lnum + 1] = { type = "inline", id = c.id, path = c.path }
+
+      for _, line in ipairs(wrap(c.body, w - #indent)) do
+        local lnum = add(indent .. line, "NitBody")
+        line_map[lnum + 1] = { type = "inline", id = c.id, path = c.path }
+      end
+
+      for _, reply in ipairs(c.replies) do
+        local preview  = vim.fn.strcharpart(reply.body, 0, 60)
+        if vim.fn.strcharlen(reply.body) > 60 then preview = preview .. "…" end
+        local reply_dt = fmt_datetime(reply.created_at or "")
+        local reply_ts = reply_dt ~= "" and (reply_dt .. ": ") or ""
+        local reply_line = indent .. "  └ @" .. reply.author .. " · " .. reply_ts .. preview
+        local lnum = add(reply_line, "NitMeta")
+        line_map[lnum + 1] = { type = "inline", id = c.id, path = c.path }
+      end
+    else
+      local meta_lnum = add(indent .. "@" .. c.author .. ts, "NitMeta")
+      line_map[meta_lnum + 1] = { type = c.type, id = c.id }
+
+      for _, line in ipairs(wrap(c.body, w - #indent)) do
+        local lnum = add(indent .. line, "NitBody")
+        line_map[lnum + 1] = { type = c.type, id = c.id }
+      end
     end
+
     blank()
   end
 
-  -- Render inline threads grouped by file.
-  local session   = require("nit.session")
-  local by_path   = session.is_active() and (session.get().comments or {}) or {}
-  local has_inline = false
-
-  for path, threads in pairs(by_path) do
-    if #threads > 0 then
-      has_inline = true
-      -- File subheader
-      local fill = string.rep("┄", math.max(0, w - vim.fn.strdisplaywidth(path) - #indent - 3))
-      add(indent .. "┄ " .. path .. " " .. fill, "NitViewSubheader")
-
-      for _, thread in ipairs(threads) do
-        local line_ref = " · L" .. thread.line
-        local ts       = thread.created_at ~= "" and (" · " .. rel_time(thread.created_at)) or ""
-        local meta_lnum = add(indent .. "@" .. thread.author .. line_ref .. ts, "NitMeta")
-        line_map[meta_lnum + 1] = { type = "inline", id = thread.id, path = path }
-
-        for _, line in ipairs(wrap(thread.body, w - #indent)) do
-          local lnum = add(indent .. line, "NitBody")
-          line_map[lnum + 1] = { type = "inline", id = thread.id, path = path }
-        end
-
-        for _, reply in ipairs(thread.replies or {}) do
-          local preview  = vim.fn.strcharpart(reply.body, 0, 60)
-          if vim.fn.strcharlen(reply.body) > 60 then preview = preview .. "…" end
-          local reply_ts = reply.created_at ~= "" and (rel_time(reply.created_at) .. ": ") or ""
-          local reply_line = indent .. "  └ @" .. reply.author .. " · " .. reply_ts .. preview
-          local lnum = add(reply_line, "NitMeta")
-          -- Replies map to parent thread so `r` replies to the thread root.
-          line_map[lnum + 1] = { type = "inline", id = thread.id, path = path }
-        end
-
-        blank()
-      end
-    end
-  end
-
-  if #general == 0 and not has_inline then
+  if #all_comments == 0 then
     add(indent .. "(no comments yet)", "NitMeta")
     blank()
   end
