@@ -7,19 +7,6 @@ local render_md = (function()
   return ok and m or nil
 end)()
 
--- Attach a markdown treesitter parser to the buffer so render-markdown.nvim
--- can parse content. No-op when render-markdown is not installed.
-local function maybe_attach_treesitter(bufnr)
-  if not render_md then return end
-  pcall(vim.treesitter.start, bufnr, "markdown")
-end
-
--- Trigger a render pass on the given buffer+window via render-markdown.nvim's
--- render() API, which bypasses its filetype check. No-op if not installed.
-local function maybe_render_markdown(bufnr, winnr)
-  if not render_md or not bufnr or not winnr then return end
-  pcall(render_md.render, { buf = bufnr, win = winnr })
-end
 
 local state = {
   bufnr    = nil,
@@ -110,7 +97,11 @@ function M.open()
   vim.wo[state.winnr].signcolumn   = "no"
   vim.wo[state.winnr].cursorline   = true
 
-  maybe_attach_treesitter(state.bufnr)
+  -- When render-markdown.nvim is installed, switch to markdown filetype so
+  -- its FileType autocmd attaches and handles all rendering automatically.
+  if render_md then
+    vim.bo[state.bufnr].filetype = "markdown"
+  end
 
   set_content({ "", "  Loading…", "" })
   require("nit.keymaps").setup_view_buf(state.bufnr)
@@ -428,7 +419,6 @@ function M.refresh()
     state.line_map = lmap
     set_content(lines)
     apply_highlights(hls)
-    maybe_render_markdown(state.bufnr, state.winnr)
   end)
 end
 
