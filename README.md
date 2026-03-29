@@ -20,6 +20,12 @@ A Neovim plugin for reviewing GitHub Pull Requests without leaving your editor.
 - `git`
 - A [Nerd Font](https://www.nerdfonts.com/) — required for icons in the inline comment indicator
 
+## Optional dependencies
+
+| Plugin | Effect |
+|--------|--------|
+| [`render-markdown.nvim`](https://github.com/MeanderingProgrammer/render-markdown.nvim) | Renders markdown in the PR view float — bold, italic, inline code, code blocks, lists, and more. Install and configure it normally; nit.nvim detects it automatically. Add `"nit-view"` to render-markdown's `file_types` config for rendering to take effect in the PR view. |
+
 ## Installation
 
 ### [lazy.nvim](https://github.com/folke/lazy.nvim)
