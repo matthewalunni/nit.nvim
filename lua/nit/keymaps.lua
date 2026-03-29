@@ -242,10 +242,11 @@ function M.setup_view_buf(bufnr)
     if not session.is_active() then return end
     local s = session.get()
 
+    local title = entry.type == "inline" and " Reply " or " New PR Comment "
     require("nit.input").open({
       mode  = "reply",
       line  = 0,
-      title = " Reply ",
+      title = title,
       on_submit = function(body)
         if entry.type == "inline" then
           gh.reply_comment(s.repo, s.pr_number, entry.id, body,
@@ -281,7 +282,10 @@ function M.setup_view_buf(bufnr)
   vim.keymap.set("n", "gf", function()
     local view  = require("nit.view")
     local entry = view.entry_at_cursor()
-    if not entry or entry.type ~= "inline" then return end
+    if not entry or entry.type ~= "inline" then
+      vim.notify("nit: cursor is not on an inline thread", vim.log.levels.INFO)
+      return
+    end
     local session = require("nit.session")
     if not session.is_active() then return end
     local file = session.get_file_by_path(entry.path)
