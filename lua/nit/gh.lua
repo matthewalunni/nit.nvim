@@ -231,4 +231,51 @@ function M.current_repo(cb)
   end)
 end
 
+-- Fetch PR metadata (title, body, state, author, base/head refs).
+-- cb(data, err)
+function M.pr_details(repo, number, cb)
+  M.json({
+    "api",
+    string.format("/repos/%s/pulls/%d", repo, number),
+  }, cb)
+end
+
+-- Fetch commits on a PR (up to 100).
+-- cb(commit_list, err)
+function M.pr_commits(repo, number, cb)
+  M.json({
+    "api",
+    string.format("/repos/%s/pulls/%d/commits?per_page=100", repo, number),
+  }, cb)
+end
+
+-- Fetch submitted reviews on a PR.
+-- cb(review_list, err)
+function M.pr_reviews(repo, number, cb)
+  M.json({
+    "api",
+    string.format("/repos/%s/pulls/%d/reviews?per_page=100", repo, number),
+  }, cb)
+end
+
+-- Fetch general issue/PR comments (the conversation at the bottom of a PR).
+-- cb(comment_list, err)
+function M.pr_issue_comments(repo, number, cb)
+  M.json({
+    "api",
+    string.format("/repos/%s/issues/%d/comments?per_page=100", repo, number),
+  }, cb)
+end
+
+-- Post a new general PR comment (issue comment).
+-- cb(result, err)
+function M.post_issue_comment(repo, number, body, cb)
+  M.json({
+    "api",
+    string.format("/repos/%s/issues/%d/comments", repo, number),
+    "--method", "POST",
+    "-f", "body=" .. body,
+  }, cb)
+end
+
 return M
