@@ -51,15 +51,17 @@ function M.review_selection(bufnr)
     return vim.fn.termopen(cmd, {
       on_exit = function()
         vim.schedule(function()
-          if vim.api.nvim_buf_is_valid(buf) then
-            vim.api.nvim_buf_delete(buf, { force = true })
+          if vim.api.nvim_win_is_valid(win) then
+            vim.api.nvim_win_close(win, true)
           end
         end)
       end,
     })
   end)
-  if job_id == -1 then
-    vim.api.nvim_win_close(win, true)
+  if job_id < 1 then
+    if vim.api.nvim_win_is_valid(win) then
+      vim.api.nvim_win_close(win, true)
+    end
     vim.notify("nit: failed to launch AI tool — is '" .. tostring(type(tool) == "table" and tool[1] or tool) .. "' installed?", vim.log.levels.ERROR)
     return
   end
