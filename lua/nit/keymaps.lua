@@ -128,6 +128,7 @@ end
 ---@param path string  relative path of the file
 function M.setup_diff_buf(bufnr, path)
   local o = { buffer = bufnr, silent = true }
+  local keys = require("nit.config").get("keys")
 
   -- Comment on current line (normal mode)
   vim.keymap.set("n", "<leader>grc", function()
@@ -213,6 +214,12 @@ function M.setup_diff_buf(bufnr, path)
   vim.keymap.set("n", "[c", function()
     require("nit.diff").prev_hunk()
   end, vim.tbl_extend("force", o, { desc = "Previous diff hunk" }))
+
+  -- Send visual selection to AI for review
+  vim.keymap.set("v", keys.ai_review, function()
+    vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("<Esc>", true, false, true), "x", false)
+    require("nit.ai").review_selection(bufnr)
+  end, vim.tbl_extend("force", o, { desc = "Send selection to AI for review" }))
 end
 
 -- Register buffer-local keymaps for the nit-view float buffer.
