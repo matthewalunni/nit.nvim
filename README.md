@@ -121,6 +121,7 @@ require("nit").setup({
 | `<leader>grx` | Normal | Toggle comment thread expand/collapse |
 | `]r` / `[r` | Normal | Next / previous comment |
 | `]c` / `[c` | Normal | Next / previous diff hunk |
+| `<leader>gra` | Visual | Send selection to AI for review |
 
 **File panel:**
 
