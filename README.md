@@ -68,6 +68,9 @@ require("nit").setup({
   auto_open_panel = true,
   auto_fetch_comments = true,
   comment_cache_ttl = 120, -- seconds
+  ai = {
+    tool = "claude",  -- string or table e.g. { "claude", "--model", "sonnet" }
+  },
   icons = {
     added    = " ",
     modified = " ",
