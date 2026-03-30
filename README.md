@@ -87,14 +87,18 @@ require("nit").setup({
 
 ## Usage
 
-| Command       | Description                          |
-|---------------|--------------------------------------|
-| `:Nit`        | Open PR picker (same as `:Nit pr`)   |
-| `:Nit pr`     | Select and checkout a PR             |
-| `:Nit panel`  | Toggle the changed-files panel       |
-| `:Nit view`   | Open the full PR overview float      |
-| `:Nit start`  | Start a review                       |
-| `:Nit submit` | Submit your review                   |
+| Command          | Description                                        |
+|------------------|----------------------------------------------------|
+| `:Nit`           | Open PR picker (same as `:Nit pr`)                 |
+| `:Nit pr`        | Select and checkout a PR                           |
+| `:Nit pr 123`    | Load PR #123 directly (skip the picker)            |
+| `:Nit 123`       | Shorthand for `:Nit pr 123`                        |
+| `:Nit panel`     | Toggle the changed-files panel                     |
+| `:Nit panel 123` | Toggle the panel, loading PR #123 if not active    |
+| `:Nit view`      | Open the full PR overview float                    |
+| `:Nit view 123`  | Open the PR overview float for PR #123             |
+| `:Nit start`     | Start a review                                     |
+| `:Nit submit`    | Submit your review                                 |
 
 **Typical workflow:**
 
