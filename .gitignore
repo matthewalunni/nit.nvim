@@ -11,3 +11,6 @@ doc/tags
 
 # Superpowers docs
 docs/superpowers/
+
+# Git worktrees
+.worktrees/
