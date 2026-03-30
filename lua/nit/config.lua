@@ -5,6 +5,9 @@ local defaults = {
   auto_open_panel = true,
   auto_fetch_comments = true,
   comment_cache_ttl = 120, -- seconds
+  ai = {
+    tool = "claude",  -- string or table e.g. { "claude", "--model", "sonnet" }
+  },
   icons = {
     added = " ",
     modified = " ",
@@ -18,6 +21,7 @@ local defaults = {
     start_review = "<leader>grs",
     submit_review = "<leader>grS",
     open_pr_view = "<leader>grv",
+    ai_review = "<leader>gra",
   },
 }
 
