@@ -26,8 +26,8 @@ function M.review_selection(bufnr)
   local ai_cfg = config.get("ai") or {}
   local tool = ai_cfg.tool or "claude"
 
-  local s = vim.fn.line("'<")
-  local e = vim.fn.line("'>")
+  local s = vim.api.nvim_buf_get_mark(bufnr, "<")[1]
+  local e = vim.api.nvim_buf_get_mark(bufnr, ">")[1]
   local lines = vim.api.nvim_buf_get_lines(bufnr, s - 1, e, false)
 
   if #lines == 0 then
@@ -45,10 +45,24 @@ function M.review_selection(bufnr)
   vim.api.nvim_win_set_height(win, 20)
 
   local buf = vim.api.nvim_create_buf(false, true)
-  vim.api.nvim_buf_set_name(buf, "nit://ai-review")
   vim.api.nvim_win_set_buf(win, buf)
 
-  vim.fn.termopen(cmd)
+  local job_id = vim.api.nvim_buf_call(buf, function()
+    return vim.fn.termopen(cmd, {
+      on_exit = function()
+        vim.schedule(function()
+          if vim.api.nvim_buf_is_valid(buf) then
+            vim.api.nvim_buf_delete(buf, { force = true })
+          end
+        end)
+      end,
+    })
+  end)
+  if job_id == -1 then
+    vim.api.nvim_win_close(win, true)
+    vim.notify("nit: failed to launch AI tool — is '" .. tostring(type(tool) == "table" and tool[1] or tool) .. "' installed?", vim.log.levels.ERROR)
+    return
+  end
   vim.cmd("startinsert")
 end
 
