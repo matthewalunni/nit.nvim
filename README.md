@@ -69,7 +69,11 @@ require("nit").setup({
   auto_fetch_comments = true,
   comment_cache_ttl = 120, -- seconds
   ai = {
-    tool = "claude",  -- string or table e.g. { "claude", "--model", "sonnet" }
+    -- string or table; the prompt is appended as the final argument.
+    -- claude:   tool = "claude"
+    -- opencode: tool = { "opencode", "run" }, keep_open = true
+    tool = "claude",
+    keep_open = false, -- set true for non-interactive tools (e.g. opencode run)
   },
   icons = {
     added    = " ",

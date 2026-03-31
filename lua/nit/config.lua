@@ -7,6 +7,7 @@ local defaults = {
   comment_cache_ttl = 120, -- seconds
   ai = {
     tool = "claude",  -- string or table e.g. { "claude", "--model", "sonnet" }
+    keep_open = false, -- keep split open after the tool process exits
   },
   icons = {
     added = " ",

@@ -25,6 +25,7 @@ function M.review_selection(bufnr)
   local config = require("nit.config")
   local ai_cfg = config.get("ai") or {}
   local tool = ai_cfg.tool or "claude"
+  local keep_open = ai_cfg.keep_open or false
 
   local s = vim.api.nvim_buf_get_mark(bufnr, "<")[1]
   local e = vim.api.nvim_buf_get_mark(bufnr, ">")[1]
@@ -50,6 +51,7 @@ function M.review_selection(bufnr)
   local job_id = vim.api.nvim_buf_call(buf, function()
     return vim.fn.termopen(cmd, {
       on_exit = function()
+        if keep_open then return end
         vim.schedule(function()
           if vim.api.nvim_win_is_valid(win) then
             vim.api.nvim_win_close(win, true)
