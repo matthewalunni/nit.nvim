@@ -96,12 +96,22 @@ function M.refresh()
   local lines = {}
   local hls = {} -- { {lnum, col_start, col_end, hl_group} }
 
+  local win_width = is_valid_win() and vim.api.nvim_win_get_width(state.winnr) or 40
+
   for i, f in ipairs(files) do
     local icon = icons[f.status] or " "
     local count = session.comment_count_for(f.path)
     local badge = count > 0 and ("  " .. icons.comment .. count) or ""
     local viewed_prefix = f.viewed and "  " or "  "
-    local line_text = viewed_prefix .. icon .. " " .. f.path .. badge
+    local prefix_len = vim.fn.strdisplaywidth(viewed_prefix .. icon .. " ")
+    local badge_len = vim.fn.strdisplaywidth(badge)
+    local max_path_len = win_width - prefix_len - badge_len
+    local path = f.path
+    if vim.fn.strdisplaywidth(path) > max_path_len then
+      -- Truncate from the left so the filename remains visible
+      path = "…" .. vim.fn.strcharpart(path, vim.fn.strchars(path) - max_path_len + 1)
+    end
+    local line_text = viewed_prefix .. icon .. " " .. path .. badge
 
     table.insert(lines, line_text)
 
@@ -109,7 +119,7 @@ function M.refresh()
     if count > 0 then
       table.insert(hls, {
         lnum = i - 1,
-        col_start = #viewed_prefix + #icon + 1 + #f.path + 1,
+        col_start = #viewed_prefix + #icon + 1 + #path + 1,
         col_end = -1,
         hl = "NitCommentBadge",
       })
