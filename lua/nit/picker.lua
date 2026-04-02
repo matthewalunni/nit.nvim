@@ -11,11 +11,25 @@ end
 
 local function fetch_comments_bg(pr)
   require("nit.comments").fetch(function()
-    -- Refresh panel once comments are loaded (updates count badges)
-    local panel = require("nit.panel")
-    if panel.is_open() then
-      vim.schedule(function() panel.refresh() end)
-    end
+    vim.schedule(function()
+      -- Refresh panel once comments are loaded (updates count badges)
+      local panel = require("nit.panel")
+      if panel.is_open() then panel.refresh() end
+
+      -- Re-render extmarks on any session-file buffers already open in the diff view
+      local session = require("nit.session")
+      local extmarks = require("nit.extmarks")
+      local util = require("nit.util")
+      for _, bufnr in ipairs(vim.api.nvim_list_bufs()) do
+        if vim.api.nvim_buf_is_valid(bufnr) then
+          local name = util.relative_buf_path(vim.api.nvim_buf_get_name(bufnr))
+          local file = session.get_file_by_path(name)
+          if file then
+            extmarks.render_and_reapply(file.path, bufnr)
+          end
+        end
+      end
+    end)
   end)
 end
 
