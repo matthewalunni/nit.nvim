@@ -116,8 +116,13 @@ local function setup_diff(base_buf, file)
   if file.status == "deleted" then
     local del_buf = vim.api.nvim_create_buf(false, true)
     vim.bo[del_buf].buftype   = "nofile"
+    local del_name = "[deleted] " .. file.path
+    local existing_del = vim.fn.bufnr(vim.fn.fnameescape(del_name))
+    if existing_del ~= -1 and existing_del ~= del_buf then
+      pcall(vim.api.nvim_buf_delete, existing_del, { force = true })
+    end
+    vim.api.nvim_buf_set_name(del_buf, del_name)
     vim.bo[del_buf].modifiable = false
-    vim.api.nvim_buf_set_name(del_buf, "[deleted] " .. file.path)
     vim.api.nvim_win_set_buf(state.head_win, del_buf)
   else
     vim.cmd("edit " .. vim.fn.fnameescape(file.path))
@@ -193,11 +198,20 @@ function M.open_for_file(file)
     end
   end
 
+  -- Helper: wipe any existing buffer claiming a given name so nvim_buf_set_name succeeds.
+  local function claim_buf_name(buf, name)
+    local existing = vim.fn.bufnr(vim.fn.fnameescape(name))
+    if existing ~= -1 and existing ~= buf then
+      pcall(vim.api.nvim_buf_delete, existing, { force = true })
+    end
+    vim.api.nvim_buf_set_name(buf, name)
+  end
+
   -- Added files: diff against an empty buffer.
   if file.status == "added" then
     local base_buf = vim.api.nvim_create_buf(false, true)
     vim.bo[base_buf].buftype = "nofile"
-    vim.api.nvim_buf_set_name(base_buf, "[base] " .. file.path)
+    claim_buf_name(base_buf, "[base] " .. file.path)
     vim.schedule(function() setup_diff(base_buf, file) end)
     return
   end
@@ -209,7 +223,7 @@ function M.open_for_file(file)
     local ft = vim.filetype.match({ filename = file.path }) or ""
     vim.bo[base_buf].filetype = ft
     vim.bo[base_buf].buftype  = "nofile"
-    vim.api.nvim_buf_set_name(base_buf, "[base] " .. file.path)
+    claim_buf_name(base_buf, "[base] " .. file.path)
     vim.schedule(function() setup_diff(base_buf, file) end)
   end)
 end
