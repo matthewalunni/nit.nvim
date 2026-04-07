@@ -8,9 +8,7 @@ function M.run(args, cb)
   local stderr_lines = {}
   vim.fn.jobstart(cmd, {
     on_stdout = function(_, data)
-      for _, line in ipairs(data) do
-        if line ~= "" then table.insert(stdout_lines, line) end
-      end
+      vim.list_extend(stdout_lines, data)
     end,
     on_stderr = function(_, data)
       for _, line in ipairs(data) do
@@ -18,6 +16,10 @@ function M.run(args, cb)
       end
     end,
     on_exit = function(_, code)
+      -- jobstart appends a trailing "" after a final newline; strip it
+      if stdout_lines[#stdout_lines] == "" then
+        table.remove(stdout_lines)
+      end
       cb(stdout_lines, code, stderr_lines)
     end,
   })
