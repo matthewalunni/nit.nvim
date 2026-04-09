@@ -1,5 +1,12 @@
 local M = {}
 
+-- Guard against auto-opening diffs while nvim is shutting down.
+local _exiting = false
+vim.api.nvim_create_autocmd("VimLeavePre", {
+  once = true,
+  callback = function() _exiting = true end,
+})
+
 -- After a comment is posted: invalidate cache, re-fetch, re-render.
 local function after_comment(err)
   if err then
@@ -127,6 +134,7 @@ function M.setup_panel_buf(bufnr)
   vim.api.nvim_create_autocmd("CursorMoved", {
     buffer = bufnr,
     callback = function()
+      if _exiting then return end
       if _auto_timer then
         _auto_timer:stop()
         _auto_timer:close()
@@ -134,6 +142,7 @@ function M.setup_panel_buf(bufnr)
       _auto_timer = vim.uv.new_timer()
       _auto_timer:start(150, 0, vim.schedule_wrap(function()
         _auto_timer = nil
+        if _exiting then return end
         local file = require("nit.panel").get_selected_file()
         if file then require("nit.diff").open_for_file(file) end
       end))
